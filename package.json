@@ -17,9 +17,11 @@
   },
   "homepage": "https://github.com/netsuite-devtools/chrome-web-extensions#readme",
   "devDependencies": {
-    "browserify": "^13.0.0"
+    "browserify": "^13.0.0",
+    "esprima": "^2.7.2"
   },
   "dependencies": {
-    "jquery": "^2.2.0"
+    "jquery": "^2.2.0",
+    "jquery-ui": "^1.10.5"
   }
 }
