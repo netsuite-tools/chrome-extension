@@ -1,0 +1,13 @@
+{
+  "manifest_version": 2,
+  "name": "NetSuite Developer Tools",
+  "description": "This extension to help developers using the NetSuite Webinterface. It helps you to avoid too much manual clicks and typing.",
+  "version": "0.1",
+  "content_scripts": [
+    {
+      "matches": ["https://*.netsuite.com/*"],
+      "js": ["bundle.js"],
+      "run_at": "document_end"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "chrome-web-extensions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "bundle": "browserify src/index.js  --outfile dist/bundle.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/netsuite-devtools/chrome-web-extensions.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/netsuite-devtools/chrome-web-extensions/issues"
+  },
+  "homepage": "https://github.com/netsuite-devtools/chrome-web-extensions#readme",
+  "devDependencies": {
+    "browserify": "^13.0.0"
+  },
+  "dependencies": {
+    "jquery": "^2.2.0"
+  }
+}
