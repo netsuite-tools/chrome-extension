@@ -12532,7 +12532,6 @@ if ($(".uir-record-type").text() === "Debug Existing") {
           range.selectNode(cookie[0]);
           window.getSelection().addRange(range);
           try {
-            // Now that we've selected the anchor text, execute the copy command
             var successful = document.execCommand('copy');
             if (!successful) {
               throw new Error();
