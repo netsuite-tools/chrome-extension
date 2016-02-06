@@ -12436,11 +12436,151 @@ return jQuery;
 },{}],7:[function(require,module,exports){
 var $ = require('jquery');
 require('jquery-ui/autocomplete');
+observeDOM = require('./dom-observer');
 
-// var API_LIST = require('../vendor/netsuite-api.json');
-var API_LIST = [
+var API_LIST = require('../vendor/netsuite-api.json');
+var STORAGE_KEY = 'debugger-history';
+
+var addEntry = function(entry) {
+  var list = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  list.unshift(entry);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+var getEntries = function() {
+  return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+}
+
+var historyMode = false;
+var evalInputSelector = '#evalexpression';
+var evalInputElement = $(evalInputSelector);
+if (evalInputElement.length > 0) {
+  var counter = -1;
+  evalInputElement.attr("autocomplete", "off");
+  var keyDownHandler = function(e) {
+    if (e.keyCode == 13) {
+      if ($('.ui-autocomplete .ui-state-focus').length === 0) {
+        addEntry(evalInputElement.val());
+        counter = -1;
+      }
+    }
+    if (e.shiftKey && (e.keyCode == 38 || e.keyCode == 40)) {
+      // stop jquery autocomplete handler
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      e.stopPropagation();
+    } else {
+      // continue with other handlers
+      return true;
+    }
+    if (e.keyCode == 38) {
+      // arrow up
+      var items = getEntries();
+      counter++;
+      if (counter >= items.length) {
+        counter = items.length - 1;
+      }
+      var selected = items[counter];
+      evalInputElement.val(selected);
+    } else if (e.keyCode == 40) {
+      // arrow down
+      var items = getEntries();
+      counter--;
+      if (counter <= -1) {
+        counter = -1;
+        return evalInputElement.val('');
+      }
+      // >= 0
+      var selected = items[counter];
+      evalInputElement.val(selected);
+    }
+  };
+
+  evalInputElement.on('keydown', keyDownHandler);
+
+  // inject hidden input for jquery autocomplete
+  evalInputElement.parent().append('<input type="hidden" id="ns-api-id">');
+  evalInputElement.autocomplete({
+      minLength: 0,
+      source: API_LIST,
+      focus: function( event, ui ) {
+        evalInputElement.val( ui.item.label );
+        return false;
+      },
+      select: function( event, ui ) {
+        $( evalInputSelector ).val( ui.item.label );
+        $( "#ns-api-id" ).val( ui.item.value );
+        return false;
+      },
+    })
+    .autocomplete().data("uiAutocomplete")._renderItem = function( ul, item ) {
+      return $( "<li>" )
+        .append( "<a title='" + item.comment + "'><div>" + item.value + "</div><div class='small'>" + "function(" + item.params.join(', ') + ")</div></a" )
+        .appendTo( ul );
+    };
+}
+
+// inject button to copy and close the cookie debug session
+//https://debugger.sandbox.netsuite.com/app/common/scripting/scriptdebugger.nl?attach=T
+if ($(".uir-record-type").text() === "Debug Existing") {
+  observeDOM( document.querySelector("#outerwrapper"), function(arg) {
+    setTimeout(function() {
+      var cookie = $("#div__alert .descr");
+      if (cookie.length > 0) {
+        $(document.body).append("<button style='font-size: 2em;'class='copy-debug-sesion'>Copy Cookie & Close</button>");
+        $(".copy-debug-sesion").on('click', function(e) {
+          var range = document.createRange();
+          range.selectNode(cookie[0]);
+          window.getSelection().addRange(range);
+          try {
+            // Now that we've selected the anchor text, execute the copy command
+            var successful = document.execCommand('copy');
+            if (!successful) {
+              throw new Error();
+            }
+            $('#tbl_close button').click();
+          } catch(err) {
+            $(document.body).append('<div>Oops, could not copy, just press <pre>CTR/CMD + C</pre> now</div>');
+            console.log($("#div__alert .descr").text());
+          }
+        });
+      } else {
+        alert('Cookie not found');
+      }
+    }, 100);
+  });
+}
+
+},{"../vendor/netsuite-api.json":10,"./dom-observer":8,"jquery":6,"jquery-ui/autocomplete":1}],8:[function(require,module,exports){
+// from http://stackoverflow.com/a/14570614
+module.exports = (function(){
+    var MutationObserver = window.MutationObserver || window.WebKitMutationObserver,
+        eventListenerSupported = window.addEventListener;
+
+    return function(obj, callback){
+        if( MutationObserver ){
+            // define a new observer
+            var obs = new MutationObserver(function(mutations, observer){
+                if( mutations[0].addedNodes.length || mutations[0].removedNodes.length )
+                    callback();
+            });
+            // have the observer observe foo for changes in children
+            obs.observe( obj, { childList:true, subtree:true });
+        }
+        else if( eventListenerSupported ){
+            obj.addEventListener('DOMNodeInserted', callback, false);
+            obj.addEventListener('DOMNodeRemoved', callback, false);
+        }
+    }
+})();
+
+},{}],9:[function(require,module,exports){
+require('./debug-helper');
+
+},{"./debug-helper":7}],10:[function(require,module,exports){
+module.exports=[
   {
-    "name": "nlapiCopyRecord",
+    "value": "nlapiCopyRecord",
+    "label": "nlapiCopyRecord",
     "params": [
       "type",
       "id",
@@ -12449,84 +12589,1378 @@ var API_LIST = [
     "comment": "*\n * Return a new record using values from an existing record.\n * @governance 10 units for transactions, 2 for custom records, 4 for all other records\n *\n * @param {string} \ttype The record type name.\n * @param {int} \tid The internal ID for the record.\n * @param {Object} \tinitializeValues Contains an array of name/value pairs of defaults to be used during record initialization.\n * @return {nlobjRecord}  Returns an nlobjRecord object of a copied record.\n *\n * @since\t2007.0"
   },
   {
-    "name": "nlapiLoadRecord",
+    "value": "nlapiLoadRecord",
+    "label": "nlapiLoadRecord",
     "params": [
       "type",
       "id",
       "initializeValues"
     ],
     "comment": "*\n * Load an existing record from the system.\n * @governance 10 units for transactions, 2 for custom records, 4 for all other records\n *\n * @param {string} \ttype The record type name.\n * @param {int} \tid The internal ID for the record.\n * @param {Object} \tinitializeValues Contains an array of name/value pairs of defaults to be used during record initialization.\n * @return {nlobjRecord}  Returns an nlobjRecord object of an existing NetSuite record.\n *\n * @exception {SSS_INVALID_RECORD_TYPE}\n * @exception {SSS_TYPE_ARG_REQD}\n * @exception {SSS_INVALID_INTERNAL_ID}\n * @exception {SSS_ID_ARG_REQD}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiCreateRecord",
+    "label": "nlapiCreateRecord",
+    "params": [
+      "type",
+      "initializeValues"
+    ],
+    "comment": "*\n * Instantiate a new nlobjRecord object containing all the default field data for that record type.\n * @governance 10 units for transactions, 2 for custom records, 4 for all other records\n *\n * @param {string} type record type ID.\n * @param {Object} initializeValues Contains an array of name/value pairs of defaults to be used during record initialization.\n * @return {nlobjRecord}   Returns an nlobjRecord object of a new record from the system.\n *\n * @exception {SSS_INVALID_RECORD_TYPE}\n * @exception {SSS_TYPE_ARG_REQD}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiSubmitRecord",
+    "label": "nlapiSubmitRecord",
+    "params": [
+      "record",
+      "doSourcing",
+      "ignoreMandatoryFields"
+    ],
+    "comment": "*\n * Submit a record to the system for creation or update.\n * @governance 20 units for transactions, 4 for custom records, 8 for all other records\n *\n * @param {nlobjRecord} record nlobjRecord object containing the data record.\n * @param {boolean} \t[doSourcing] If not set, this argument defaults to false.\n * @param {boolean} \t[ignoreMandatoryFields] Disables mandatory field validation for this submit operation.\n * @return {string} internal ID for committed record.\n *\n * @exception {SSS_INVALID_RECORD_OBJ}\n * @exception {SSS_RECORD_OBJ_REQD}\n * @exception {SSS_INVALID_SOURCE_ARG}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiDeleteRecord",
+    "label": "nlapiDeleteRecord",
+    "params": [
+      "type",
+      "id"
+    ],
+    "comment": "*\n * Delete a record from the system.\n * @governance 20 units for transactions, 4 for custom records, 8 for all other records\n *\n * @param {string} \ttype The record type name.\n * @param {int} \tid The internal ID for the record.\n * @return {void}\n *\n * @exception {SSS_INVALID_RECORD_TYPE}\n * @exception {SSS_TYPE_ARG_REQD}\n * @exception {SSS_INVALID_INTERNAL_ID}\n * @exception {SSS_ID_ARG_REQD}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiSearchRecord",
+    "label": "nlapiSearchRecord",
+    "params": [
+      "type",
+      "id",
+      "filters",
+      "columns"
+    ],
+    "comment": "*\n * Perform a record search using an existing search or filters and columns.\n * @governance 10 units\n * @restriction returns the first 1000 rows in the search\n *\n * @param {string} \t\ttype record type ID.\n * @param {int, string} [id] The internal ID or script ID for the saved search to use for search.\n * @param {nlobjSearchFilter, nlobjSearchFilter[]} [filters] [optional] A single nlobjSearchFilter object - or - an array of nlobjSearchFilter objects.\n * @param {nlobjSearchColumn, nlobjSearchColumn[]} [columns] [optional] A single nlobjSearchColumn object - or - an array of nlobjSearchColumn objects.\n * @return {nlobjSearchResult[]} Returns an array of nlobjSearchResult objects corresponding to the searched records.\n *\n * @exception {SSS_INVALID_RECORD_TYPE}\n * @exception {SSS_TYPE_ARG_REQD}\n * @exception {SSS_INVALID_SRCH_ID}\n * @exception {SSS_INVALID_SRCH_FILTER}\n * @exception {SSS_INVALID_SRCH_FILTER_JOIN}\n * @exception {SSS_INVALID_SRCH_OPERATOR}\n * @exception {SSS_INVALID_SRCH_COL_NAME}\n * @exception {SSS_INVALID_SRCH_COL_JOIN}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiSearchGlobal",
+    "label": "nlapiSearchGlobal",
+    "params": [
+      "keywords"
+    ],
+    "comment": "*\n * Perform a global record search across the system.\n * @governance 10 units\n * @restriction returns the first 1000 rows in the search\n *\n * @param {string} keywords Global search keywords string or expression.\n * @return {nlobjSearchResult[]} Returns an Array of nlobjSearchResult objects containing the following four columns: name, type (as shown in the UI), info1, and info2.\n *\n * @since\t2008.1"
+  },
+  {
+    "value": "nlapiSearchDuplicate",
+    "label": "nlapiSearchDuplicate",
+    "params": [
+      "type",
+      "fields",
+      "id"
+    ],
+    "comment": "*\n * Perform a duplicate record search using Duplicate Detection criteria.\n * @governance 10 units\n * @restriction returns the first 1000 rows in the search\n *\n * @param {string} \t\ttype The recordType you are checking duplicates for (for example, customer|lead|prospect|partner|vendor|contact).\n * @param {string[]} \t[fields] array of field names used to detect duplicate (for example, companyname|email|name|phone|address1|city|state|zipcode).\n * @param {int} \t\t[id] internal ID of existing record. Depending on the use case, id may or may not be a required argument.\n * @return {nlobjSearchResult[]} Returns an Array of nlobjSearchResult objects corresponding to the duplicate records.\n *\n * @since\t2008.1"
+  },
+  {
+    "value": "nlapiTransformRecord",
+    "label": "nlapiTransformRecord",
+    "params": [
+      "type",
+      "id",
+      "transformType",
+      "transformValues"
+    ],
+    "comment": "*\n * Create a new record using values from an existing record of a different type.\n * @governance 10 units for transactions, 2 for custom records, 4 for all other records\n *\n * @param {string} \ttype The record type name.\n * @param {int} \tid The internal ID for the record.\n * @param {string} \ttransformType The recordType you are transforming the existing record into.\n * @param {Object} \t[transformValues] An object containing transform default option/value pairs used to pre-configure transformed record\n * @return {nlobjRecord}\n *\n * @exception {SSS_INVALID_URL_CATEGORY}\n * @exception {SSS_CATEGORY_ARG_REQD}\n * @exception {SSS_INVALID_TASK_ID}\n * @exception {SSS_TASK_ID_REQD}\n * @exception {SSS_INVALID_INTERNAL_ID}\n * @exception {SSS_INVALID_EDITMODE_ARG}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiVoidTransaction",
+    "label": "nlapiVoidTransaction",
+    "params": [
+      "type",
+      "id"
+    ],
+    "comment": "*\n * void a transaction based on type and id .\n * @governance 10 units for transactions\n *\n * @param {string} \ttype The transaction type name.\n * @param {string} \tid The internal ID for the record.\n * @return {string}  if accounting preference is reversing journal, then it is new journal id,\n *                   otherwise, it is the input record id\n *\n * @since\t2014.1"
+  },
+  {
+    "value": "nlapiLookupField",
+    "label": "nlapiLookupField",
+    "params": [
+      "type",
+      "id",
+      "fields",
+      "text"
+    ],
+    "comment": "*\n * Fetch the value of one or more fields on a record. This API uses search to look up the fields and is much\n * faster than loading the record in order to get the field.\n * @governance 10 units for transactions, 2 for custom records, 4 for all other records\n *\n * @param {string} \ttype The record type name.\n * @param {int} \tid The internal ID for the record.\n * @param {string, string[]} fields - field or fields to look up.\n * @param {boolean} [text] If set then the display value is returned instead for select fields.\n * @return {string, Object} single value or an Object of field name/value pairs depending on the fields argument.\n *\n * @since\t2008.1"
+  },
+  {
+    "value": "nlapiSubmitField",
+    "label": "nlapiSubmitField",
+    "params": [
+      "type",
+      "id",
+      "fields",
+      "values",
+      "doSourcing"
+    ],
+    "comment": "*\n * Submit the values of a field or set of fields for an existing record.\n * @governance 10 units for transactions, 2 for custom records, 4 for all other records\n * @restriction only supported for records and fields where DLE (Direct List Editing) is supported\n *\n * @param {string} \t\ttype The record type name.\n * @param {int} \t\tid The internal ID for the record.\n * @param {string, string[]} fields field or fields being updated.\n * @param {string, string[]} values field value or field values used for updating.\n * @param {boolean} \t[doSourcing] If not set, this argument defaults to false and field sourcing does not occur.\n * @return {void}\n *\n * @since\t2008.1"
+  },
+  {
+    "value": "nlapiAttachRecord",
+    "label": "nlapiAttachRecord",
+    "params": [
+      "type1",
+      "id1",
+      "type2",
+      "id2",
+      "properties"
+    ],
+    "comment": "*\n * Attach a single record to another with optional properties.\n * @governance 10 units\n *\n * @param {string} \ttype1 The record type name being attached\n * @param {int} \tid1 The internal ID for the record being attached\n * @param {string} \ttype2 The record type name being attached to\n * @param {int} \tid2 The internal ID for the record being attached to\n * @param {Object} \t[properties] Object containing name/value pairs used to configure attach operation\n * @return {void}\n *\n * @since\t2008.2"
+  },
+  {
+    "value": "nlapiDetachRecord",
+    "label": "nlapiDetachRecord",
+    "params": [
+      "type1",
+      "id1",
+      "type2",
+      "id2",
+      "properties"
+    ],
+    "comment": "*\n * Detach a single record from another with optional properties.\n * @governance 10 units\n *\n * @param {string} \ttype1 The record type name being attached\n * @param {int} \tid1 The internal ID for the record being attached\n * @param {string} \ttype2 The record type name being attached to\n * @param {int} \tid2 The internal ID for the record being attached to\n * @param {Object} \t[properties] Object containing name/value pairs used to configure detach operation\n * @return {void}\n *\n * @since\t2008.2"
+  },
+  {
+    "value": "nlapiResolveURL",
+    "label": "nlapiResolveURL",
+    "params": [
+      "type",
+      "subtype",
+      "id",
+      "pagemode"
+    ],
+    "comment": "*\n * Resolve a URL to a resource or object in the system.\n *\n * @param {string} type type specifier for URL: suitelet|tasklink|record|mediaitem\n * @param {string} subtype subtype specifier for URL (corresponding to type): scriptid|taskid|recordtype|mediaid\n * @param {string} [id] internal ID specifier (sub-subtype corresponding to type): deploymentid|n/a|recordid|n/a\n * @param {string} [pagemode] string specifier used to configure page (suitelet: external|internal, tasklink|record: edit|view)\n * @return {string}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiSetRedirectURL",
+    "label": "nlapiSetRedirectURL",
+    "params": [
+      "type",
+      "subtype",
+      "id",
+      "pagemode",
+      "parameters"
+    ],
+    "comment": "*\n * Redirect the user to a page. Only valid in the UI on Suitelets and User Events. In Client scripts this will initialize the redirect URL used upon submit.\n *\n * @param {string} type type specifier for URL: suitelet|tasklink|record|mediaitem\n * @param {string} subtype subtype specifier for URL (corresponding to type): scriptid|taskid|recordtype|mediaid\n * @param {string} [id] internal ID specifier (sub-subtype corresponding to type): deploymentid|n/a|recordid|n/a\n * @param {string} [pagemode] string specifier used to configure page (suitelet: external|internal, tasklink|record: edit|view)\n * @param {Object} [parameters] Object used to specify additional URL parameters as name/value pairs\n * @return {void}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiRequestURL",
+    "label": "nlapiRequestURL",
+    "params": [
+      "url",
+      "postdata",
+      "headers",
+      "callback",
+      "method"
+    ],
+    "comment": "*\n * Request a URL to an external or internal resource.\n * @restriction NetSuite maintains a white list of CAs that are allowed for https requests. Please see the online documentation for the complete list.\n * @governance 10 units\n *\n * @param {string} url \t\tA fully qualified URL to an HTTP(s) resource\n * @param {string, Object} \t[postdata] - string, document, or Object containing POST payload\n * @param {Object} \t\t\t[headers] - Object containing request headers.\n * @param {function} \t\t[callback] - available on the Client to support asynchronous requests. function is passed an nlobjServerResponse with the results.\n * @return {nlobjServerResponse}\n *\n * @exception {SSS_UNKNOWN_HOST}\n * @exception {SSS_INVALID_HOST_CERT}\n * @exception {SSS_REQUEST_TIME_EXCEEDED}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiGetContext",
+    "label": "nlapiGetContext",
+    "params": [],
+    "comment": "*\n * Return context information about the current user/script.\n *\n * @return {nlobjContext}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiGetUser",
+    "label": "nlapiGetUser",
+    "params": [],
+    "comment": "*\n * Return the internal ID for the currently logged in user. Returns -4 when called from online forms or \"Available without Login\" Suitelets.\n *\n * @return {int}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiGetRole",
+    "label": "nlapiGetRole",
+    "params": [],
+    "comment": "*\n * Return the internal ID for the current user's role. Returns 31 (Online Form User) when called from online forms or \"Available without Login\" Suitelets.\n *\n * @return {int}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiGetDepartment",
+    "label": "nlapiGetDepartment",
+    "params": [],
+    "comment": "*\n * Return the internal ID for the current user's department.\n *\n * @return {int}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiGetLocation",
+    "label": "nlapiGetLocation",
+    "params": [],
+    "comment": "*\n * Return the internal ID for the current user's location.\n *\n * @return {int}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiGetSubsidiary",
+    "label": "nlapiGetSubsidiary",
+    "params": [],
+    "comment": "*\n * Return the internal ID for the current user's subsidiary.\n *\n * @return {int}\n *\n * @since\t2008.1"
+  },
+  {
+    "value": "nlapiGetRecordType",
+    "label": "nlapiGetRecordType",
+    "params": [],
+    "comment": "*\n * Return the recordtype corresponding to the current page or userevent script.\n *\n * @return {string}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiGetRecordId",
+    "label": "nlapiGetRecordId",
+    "params": [],
+    "comment": "*\n * Return the internal ID corresponding to the current page or userevent script.\n *\n *  @return {int}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiSendEmail",
+    "label": "nlapiSendEmail",
+    "params": [
+      "from",
+      "to",
+      "subject",
+      "body",
+      "cc",
+      "bcc",
+      "records",
+      "files",
+      "notifySenderOnBounce",
+      "internalOnly",
+      "replyTo"
+    ],
+    "comment": "*\n * Send out an email and associate it with records in the system.\n * Supported base types are entity for entities, transaction for transactions, activity for activities and cases, record|recordtype for custom records\n * @governance 10 units\n * @restriction all outbound emails subject to email Anti-SPAM policies\n *\n * @param {int} \t\tfrom internal ID for employee user on behalf of whom this email is sent\n * @param {string, int} to email address or internal ID of user that this email is being sent to\n * @param {string} \t\tsubject email subject\n * @param {string} \t\tbody email body\n * @param {string, string[]} cc copy email address(es)\n * @param {string, string[]} bcc blind copy email address(es)\n * @param {Object} \t\trecords Object of base types -> internal IDs used to associate email to records. i.e. {entity: 100, record: 23, recordtype: customrecord_surveys}\n * @param {nlobjFile[]} files array of nlobjFile objects (files) to include as attachments\n * @param {boolean}     notifySenderOnBounce controls whether or not the sender will receive email notification of bounced emails (defaults to false)\n * @param {boolean}     internalOnly controls or not the resultingMmessage record will be visible to non-employees on the Communication tab of attached records (defaults to false)\n * @param {string} \t\treplyTo email reply-to address\n * @return {void}\n *\n * @since\t2007.0"
+  },
+  {
+    "value": "nlapiSendCampaignEmail",
+    "label": "nlapiSendCampaignEmail",
+    "params": [
+      "campaigneventid",
+      "recipientid"
+    ],
+    "comment": "*\n * Sends a single on-demand campaign email to a specified recipient and returns a campaign response ID to track the email.\n * @governance 10 units\n * @restriction works in conjunction with the Lead Nurturing (campaigndrip) sublist only\n *\n * @param {int} campaigneventid internal ID of the campaign event\n * @param {int} recipientid internal ID of the recipient - the recipient must have an email\n * @return {int}\n *\n * @since\t2010.1"
+  },
+  {
+    "value": "nlapiSendFax",
+    "label": "nlapiSendFax",
+    "params": [
+      "from",
+      "to",
+      "subject",
+      "body",
+      "records",
+      "files"
+    ],
+    "comment": "*\n * Send out a fax and associate it with records in the system. This requires fax preferences to be configured.\n * Supported base types are entity for entities, transaction for transactions, activity for activities and cases, record|recordtype for custom records\n * @governance 10 units\n *\n * @param {int} \t\tfrom internal ID for employee user on behalf of whom this fax is sent\n * @param {string, int} to fax address or internal ID of user that this fax is being sent to\n * @param {string} \t\tsubject fax subject\n * @param {string} \t\tbody fax body\n * @param {Object} \t\trecords Object of base types -> internal IDs used to associate fax to records. i.e. {entity: 100, record: 23, recordtype: customrecord_surveys}\n * @param {nlobjFile[]} files array of nlobjFile objects (files) to include as attachments\n * @return {void}\n *\n * @since\t2008.2"
+  },
+  {
+    "value": "nlapiGetField",
+    "label": "nlapiGetField",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * Return field definition for a field.\n *\n * @param {string} fldnam the name of the field\n * @return {nlobjField}\n *\n * @since\t2009.1"
+  },
+  {
+    "value": "nlapiGetMatrixField",
+    "label": "nlapiGetMatrixField",
+    "params": [
+      "type",
+      "fldnam",
+      "column"
+    ],
+    "comment": "*\n * Return field definition for a matrix field.\n *\n * @param {string} \ttype\tmatrix sublist name\n * @param {string} \tfldnam matrix field name\n * @param {int} \tcolumn matrix field column index (1-based)\n * @return {nlobjField}\n *\n * @since\t2009.2"
+  },
+  {
+    "value": "nlapiGetLineItemField",
+    "label": "nlapiGetLineItemField",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum"
+    ],
+    "comment": "*\n * Return field definition for a sublist field.\n *\n * @param {string} \ttype\tsublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \t[linenum] line number for sublist field (1-based) and only valid for sublists of type staticlist and list\n * @return {nlobjField}\n *\n * @since\t2009.1"
+  },
+  {
+    "value": "nlapiGetLineItemMatrixField",
+    "label": "nlapiGetLineItemMatrixField",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum",
+      "column"
+    ],
+    "comment": "*\n * Return an nlobjField containing sublist field metadata.\n *\n * @param {string} \ttype\tmatrix sublist name\n * @param {string} \tfldnam matrix field name\n * @param {int} \tlinenum line number (1-based)\n * @param {int} \tcolumn matrix column index (1-based)\n * @return {nlobjField}\n *\n * @since\t2009.2"
+  },
+  {
+    "value": "nlapiGetFieldValue",
+    "label": "nlapiGetFieldValue",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * Return the value of a field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} fldnam the field name\n * @return {string}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiSetFieldValue",
+    "label": "nlapiSetFieldValue",
+    "params": [
+      "fldnam",
+      "value",
+      "firefieldchanged",
+      "synchronous"
+    ],
+    "comment": "*\n * Set the value of a field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} \tfldnam the field name\n * @param {string} \tvalue value used to set field\n * @param {boolean} [firefieldchanged]\tif false then the field change event is suppressed (defaults to true)\n * @param {boolean} [synchronous] if true then sourcing and field change execution happens synchronously (defaults to false).\n * @return {void}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiGetFieldText",
+    "label": "nlapiGetFieldText",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * Return the display value of a select field's current selection on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} fldnam the field name\n * @return {string}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiSetFieldText",
+    "label": "nlapiSetFieldText",
+    "params": [
+      "fldnam",
+      "txt",
+      "firefieldchanged",
+      "synchronous"
+    ],
+    "comment": "*\n * Set the value of a field on the current record on a page using it's label.\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} \tfldnam the field name\n * @param {string} \ttxt display name used to lookup field value\n * @param {boolean} [firefieldchanged]\tif false then the field change event is suppressed (defaults to true)\n * @param {boolean} [synchronous] if true then sourcing and field change execution happens synchronously (defaults to false).\n * @return {void}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiGetFieldValues",
+    "label": "nlapiGetFieldValues",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * Return the values of a multiselect field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} fldnam the field name\n * @return {string[]}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiSetFieldValues",
+    "label": "nlapiSetFieldValues",
+    "params": [
+      "fldnam",
+      "values",
+      "firefieldchanged",
+      "synchronous"
+    ],
+    "comment": "*\n * Set the values of a multiselect field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} \t\tfldnam field name\n * @param {string[]} \tvalues array of strings containing values for field\n * @param {boolean} \t[firefieldchanged] if false then the field change event is suppressed (defaults to true)\n * @param {boolean} \t[synchronous] if true then sourcing and field change execution happens synchronously (defaults to false).\n * @return {void}\n *\n * @since\t2005.0"
+  },
+  {
+    "value": "nlapiGetFieldTexts",
+    "label": "nlapiGetFieldTexts",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * Return the values (via display text) of a multiselect field on the current record.\n * @restriction supported in client and user event scripts only.\n * @param {string} fldnam field name\n * @return {string[]}\n *\n * @since\t2009.1"
+  },
+  {
+    "value": "nlapiSetFieldTexts",
+    "label": "nlapiSetFieldTexts",
+    "params": [
+      "fldnam",
+      "texts",
+      "firefieldchanged",
+      "synchronous"
+    ],
+    "comment": "*\n * Set the values (via display text) of a multiselect field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} \t\tfldnam field name\n * @param {string[]}\ttexts array of strings containing display values for field\n * @param {boolean}\t\t[firefieldchanged]\tif false then the field change event is suppressed (defaults to true)\n * @param {boolean} \t[synchronous] if true then sourcing and field change execution happens synchronously (defaults to false).\n * @return {void}\n *\n * @since\t2009.1"
+  },
+  {
+    "value": "nlapiGetMatrixValue",
+    "label": "nlapiGetMatrixValue",
+    "params": [
+      "type",
+      "fldnam",
+      "column"
+    ],
+    "comment": "*\n * Get the value of a matrix header field\n *\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tcolumn matrix column index (1-based)\n * @return {string}\n *\n * @since\t2009.2"
+  },
+  {
+    "value": "nlapiSetMatrixValue",
+    "label": "nlapiSetMatrixValue",
+    "params": [
+      "type",
+      "fldnam",
+      "column",
+      "value",
+      "firefieldchanged",
+      "synchronous"
+    ],
+    "comment": "*\n * Set the value of a matrix header field\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tcolumn matrix column index (1-based)\n * @param {string} \tvalue field value for matrix field\n * @param {boolean} [firefieldchanged]\tif false then the field change event is suppressed (defaults to true)\n * @param {boolean} [synchronous] if true then sourcing and field change execution happens synchronously (defaults to false).\n * @return {void}\n *\n * @since\t2009.2"
+  },
+  {
+    "value": "nlapiGetCurrentLineItemMatrixValue",
+    "label": "nlapiGetCurrentLineItemMatrixValue",
+    "params": [
+      "type",
+      "fldnam",
+      "column"
+    ],
+    "comment": "*\n * Get the current value of a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tcolumn matrix column index (1-based)\n * @return {string} value\n *\n * @since\t2009.2"
+  },
+  {
+    "value": "nlapiSetCurrentLineItemMatrixValue",
+    "label": "nlapiSetCurrentLineItemMatrixValue",
+    "params": [
+      "type",
+      "fldnam",
+      "column",
+      "value",
+      "firefieldchanged",
+      "synchronous"
+    ],
+    "comment": "*\n * Set the current value of a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @restriction synchronous arg is only supported in Client SuiteScript\n *\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tcolumn matrix column index (1-based)\n * @param {string} \tvalue matrix field value\n * @param {boolean} [firefieldchanged] if false then the field change event is suppressed (defaults to true)\n * @param {boolean} [synchronous] if true then sourcing and field change execution happens synchronously (defaults to false).\n * @return {void}\n *\n * @since\t2009.2"
+  },
+  {
+    "value": "nlapiGetLineItemMatrixValue",
+    "label": "nlapiGetLineItemMatrixValue",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum",
+      "column"
+    ],
+    "comment": "*\n * Return the value of a sublist matrix field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tlinenum line number (1-based)\n * @param {int} \tcolumn column index (1-based)\n * @param {string} value\n *\n * @since\t2009.2"
+  },
+  {
+    "value": "nlapiGetLineItemValue",
+    "label": "nlapiGetLineItemValue",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum"
+    ],
+    "comment": "*\n * Return the value of a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tlinenum line number (1-based)\n * @return {string}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiGetLineItemDateTimeValue",
+    "label": "nlapiGetLineItemDateTimeValue",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum"
+    ],
+    "comment": "*\n * Return the value of a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tlinenum line number (1-based)\n * @return {string}\n *\n * @since 2013.2"
+  },
+  {
+    "value": "nlapiGetLineItemDateTimeValue",
+    "label": "nlapiGetLineItemDateTimeValue",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum",
+      "timezone"
+    ],
+    "comment": "*\n * Return the value of a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tlinenum line number (1-based)\n * @param {string} \ttimezone value\n * @return {string}\n *\n * @since 2013.2"
+  },
+  {
+    "value": "nlapiSetLineItemValue",
+    "label": "nlapiSetLineItemValue",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum",
+      "value"
+    ],
+    "comment": "*\n * Set the value of a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tlinenum line number (1-based)\n * @param {string} value\n * @retun {void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiSetLineItemDateTimeValue",
+    "label": "nlapiSetLineItemDateTimeValue",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum",
+      "value"
+    ],
+    "comment": "*\n * Set the value of a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tlinenum line number (1-based)\n * @param {string} datetime value\n * @retun {void}\n *\n * @since 2013.2"
+  },
+  {
+    "value": "nlapiSetLineItemDateTimeValue",
+    "label": "nlapiSetLineItemDateTimeValue",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum",
+      "value",
+      "timezone"
+    ],
+    "comment": "*\n * Set the value of a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tlinenum line number (1-based)\n * @param {string} datetime value\n * @param {string} timezone value\n * @retun {void}\n *\n * @since 2013.2"
+  },
+  {
+    "value": "nlapiGetLineItemText",
+    "label": "nlapiGetLineItemText",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum"
+    ],
+    "comment": "*\n * Return the label of a select field's current selection for a particular line.\n *\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {int} \tlinenum line number (1-based)\n * @return {string}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiFindLineItemValue",
+    "label": "nlapiFindLineItemValue",
+    "params": [
+      "type",
+      "fldnam",
+      "val"
+    ],
+    "comment": "*\n * Return the 1st line number that a sublist field value appears in\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @param {string} val the value being queried for in a sublist field\n * @return {int}\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiFindLineItemMatrixValue",
+    "label": "nlapiFindLineItemMatrixValue",
+    "params": [
+      "type",
+      "fldnam",
+      "column",
+      "val"
+    ],
+    "comment": "*\n * Return the 1st line number that a matrix field value appears in\n *\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam matrix field name\n * @param {int} \tcolumn matrix column index (1-based)\n * @param {string} \tval the value being queried for in a matrix field\n * @return {int}\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiGetMatrixCount",
+    "label": "nlapiGetMatrixCount",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * Return the number of columns for a matrix field\n *\n * @param {string} type sublist name\n * @param {string} fldnam matrix field name\n * @return {int}\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiGetLineItemCount",
+    "label": "nlapiGetLineItemCount",
+    "params": [
+      "type"
+    ],
+    "comment": "*\n * Return the number of sublists in a sublist on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} type sublist name\n * @return {int}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiInsertLineItem",
+    "label": "nlapiInsertLineItem",
+    "params": [
+      "type",
+      "line"
+    ],
+    "comment": "*\n * Insert and select a new line into the sublist on a page or userevent.\n *\n * @param {string} type sublist name\n * @param {int} [line] line number at which to insert a new line.\n * @return{void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiRemoveLineItem",
+    "label": "nlapiRemoveLineItem",
+    "params": [
+      "type",
+      "line"
+    ],
+    "comment": "*\n * Remove the currently selected line from the sublist on a page or userevent.\n *\n * @param {string} type sublist name\n * @param {int} [line]\tline number to remove.\n * @return {void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiSetCurrentLineItemValue",
+    "label": "nlapiSetCurrentLineItemValue",
+    "params": [
+      "type",
+      "fldnam",
+      "value",
+      "firefieldchanged",
+      "synchronous"
+    ],
+    "comment": "*\n * Set the value of a field on the currently selected line.\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @param {string} value field value\n * @param {boolean} [firefieldchanged]\tif false then the field change event is suppressed (defaults to true)\n * @param {boolean} [synchronous] if true then sourcing and field change execution happens synchronously (defaults to false).\n * @return {void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiSetCurrentLineItemDateTimeValue",
+    "label": "nlapiSetCurrentLineItemDateTimeValue",
+    "params": [
+      "type",
+      "fldnam",
+      "value"
+    ],
+    "comment": "*\n * Set the value of a field on the currently selected line.\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @param {string} value field value\n * @return {void}\n *\n * @since 2013.2"
+  },
+  {
+    "value": "nlapiSetCurrentLineItemDateTimeValue",
+    "label": "nlapiSetCurrentLineItemDateTimeValue",
+    "params": [
+      "type",
+      "fldnam",
+      "value",
+      "timezone"
+    ],
+    "comment": "*\n * Set the value of a field on the currently selected line.\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @param {string} value field value\n * @param {string} timezone value\n * @return {void}\n *\n * @since 2013.2"
+  },
+  {
+    "value": "nlapiSetCurrentLineItemText",
+    "label": "nlapiSetCurrentLineItemText",
+    "params": [
+      "type",
+      "fldnam",
+      "txt",
+      "firefieldchanged",
+      "synchronous"
+    ],
+    "comment": "*\n * Set the value of a field on the currently selected line using it's label.\n * @restriction synchronous arg is only supported in client SuiteScript\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @param {string} txt string containing display value or search text.\n * @param {boolean} [firefieldchanged]\tif false then the field change event is suppressed (defaults to true)\n * @param {boolean} [synchronous] if true then sourcing and field change execution happens synchronously (defaults to false).\n * @return {void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiGetCurrentLineItemValue",
+    "label": "nlapiGetCurrentLineItemValue",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * Return the value of a field on the currently selected line.\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @return {string}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiGetCurrentLineItemDateTimeValue",
+    "label": "nlapiGetCurrentLineItemDateTimeValue",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * Return the value of a field on the currently selected line.\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @return {string}\n *\n * @since 2013.2"
+  },
+  {
+    "value": "nlapiGetCurrentLineItemDateTimeValue",
+    "label": "nlapiGetCurrentLineItemDateTimeValue",
+    "params": [
+      "type",
+      "fldnam",
+      "timezone"
+    ],
+    "comment": "*\n * Return the value of a field on the currently selected line.\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @param {string} timezone value\n * @return {string}\n *\n * @since 2013.2"
+  },
+  {
+    "value": "nlapiGetCurrentLineItemText",
+    "label": "nlapiGetCurrentLineItemText",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * Return the label of a select field's current selection on the currently selected line.\n *\n * @param {string} type sublist name\n * @param {string} fldnam sublist field name\n * @return {string}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiGetCurrentLineItemIndex",
+    "label": "nlapiGetCurrentLineItemIndex",
+    "params": [
+      "type"
+    ],
+    "comment": "*\n * Return the line number for the currently selected line.\n *\n * @param {string} type sublist name\n * @return {int}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiSetLineItemDisabled",
+    "label": "nlapiSetLineItemDisabled",
+    "params": [
+      "type",
+      "fldnam",
+      "disable",
+      "linenum"
+    ],
+    "comment": "*\n * Disable a sublist field.\n * @restriction Only supported on sublists of type inlineeditor, editor and list (current field only)\n *\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {boolean} disable if true then field is disabled\n * @param {int} linenum line number for sublist field (1-based) and only valid for sublists of type list\n * @return {void}\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiGetFieldMandatory",
+    "label": "nlapiGetFieldMandatory",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * Return field mandatoriness.\n *\n * @param {string} fldnam field name\n * @return {boolean}\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiGetLineItemMandatory",
+    "label": "nlapiGetLineItemMandatory",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * Return sublist field mandatoriness.\n * @restriction Only supported on sublists of type inlineeditor or editor (current field only)\n *\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @return {boolean}\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiSetFieldMandatory",
+    "label": "nlapiSetFieldMandatory",
+    "params": [
+      "fldnam",
+      "mandatory"
+    ],
+    "comment": "*\n * Make a field mandatory.\n *\n * @param {string} \tfldnam field name\n * @param {boolean} mandatory if true then field is made mandatory\n * @return {void}\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiSetLineItemMandatory",
+    "label": "nlapiSetLineItemMandatory",
+    "params": [
+      "type",
+      "fldnam",
+      "mandatory"
+    ],
+    "comment": "*\n * Make a sublist field mandatory.\n * @restriction Only supported on sublists of type inlineeditor or editor (current field only)\n *\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @param {boolean} mandatory if true then field is made mandatory\n * @return {void}\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiSelectLineItem",
+    "label": "nlapiSelectLineItem",
+    "params": [
+      "type",
+      "linenum"
+    ],
+    "comment": "*\n * Select an existing line in a sublist.\n *\n * @param {string} type sublist name\n * @param {int} linenum line number to select\n * @return {void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiCommitLineItem",
+    "label": "nlapiCommitLineItem",
+    "params": [
+      "type"
+    ],
+    "comment": "*\n * Save changes made on the currently selected line to the sublist.\n *\n * @param {string} type sublist name\n * @return {void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiCancelLineItem",
+    "label": "nlapiCancelLineItem",
+    "params": [
+      "type"
+    ],
+    "comment": "*\n * Cancel any changes made on the currently selected line.\n * @restriction Only supported for sublists of type inlineeditor and editor\n *\n * @param {string} type sublist name\n * @return {void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiSelectNewLineItem",
+    "label": "nlapiSelectNewLineItem",
+    "params": [
+      "type"
+    ],
+    "comment": "*\n * Select a new line in a sublist.\n * @restriction Only supported for sublists of type inlineeditor and editor\n *\n * @param {string} type sublist name\n * @return {void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiRefreshLineItems",
+    "label": "nlapiRefreshLineItems",
+    "params": [
+      "type"
+    ],
+    "comment": "*\n * Refresh the sublist table.\n * @restriction Only supported for sublists of type inlineeditor, editor, and staticlist\n * @restriction Client SuiteScript only.\n *\n * @param {string} type sublist name\n * @return{void}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiInsertSelectOption",
+    "label": "nlapiInsertSelectOption",
+    "params": [
+      "fldnam",
+      "value",
+      "text",
+      "selected"
+    ],
+    "comment": "*\n * Adds a select option to a scripted select or multiselect field.\n * @restriction Client SuiteScript only\n *\n * @param {string} fldnam field name\n * @param {string} value internal ID for select option\n * @param {string} text display text for select option\n * @param {boolean} [selected] if true then option will be selected by default\n * @return {void}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiRemoveSelectOption",
+    "label": "nlapiRemoveSelectOption",
+    "params": [
+      "fldnam",
+      "value"
+    ],
+    "comment": "*\n * Removes a select option (or all if value is null) from a scripted select or multiselect field.\n * @restriction Client SuiteScript only\n *\n * @param {string} fldnam field name\n * @param {string} value internal ID of select option to remove\n * @return {void}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiInsertLineItemOption",
+    "label": "nlapiInsertLineItemOption",
+    "params": [
+      "type",
+      "fldnam",
+      "value",
+      "text",
+      "selected"
+    ],
+    "comment": "*\n * Adds a select option to a scripted select or multiselect sublist field.\n * @restriction Client SuiteScript only\n *\n * @param {string} type\tsublist name\n * @param {string} fldnam sublist field name\n * @param {string} value internal ID for select option\n * @param {string} text display text for select option\n * @param {boolean} [selected] if true then option will be selected by default\n * @return {void}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiRemoveLineItemOption",
+    "label": "nlapiRemoveLineItemOption",
+    "params": [
+      "type",
+      "fldnam",
+      "value"
+    ],
+    "comment": "*\n * Removes a select option (or all if value is null) from a scripted select or multiselect sublist field.\n * @restriction Client SuiteScript only\n *\n * @param {string} type\tsublist name\n * @param {string} fldnam sublist field name\n * @param {string} value internal ID for select option to remove\n * @return {void}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiIsLineItemChanged",
+    "label": "nlapiIsLineItemChanged",
+    "params": [
+      "type"
+    ],
+    "comment": "*\n * Returns true if any changes have been made to a sublist.\n * @restriction Client SuiteScript only\n *\n * @param {string} type sublist name\n * @return {boolean}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiGetNewRecord",
+    "label": "nlapiGetNewRecord",
+    "params": [],
+    "comment": "*\n * Return an record object containing the data being submitted to the system for the currenr record.\n * @restriction User Event scripts only\n *\n * @return {nlobjRecord}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiGetOldRecord",
+    "label": "nlapiGetOldRecord",
+    "params": [],
+    "comment": "*\n * Return an record object containing the current record's data prior to the write operation.\n * @restriction beforeSubmit|afterSubmit User Event scripts only\n *\n * @return {nlobjRecord}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiCreateError",
+    "label": "nlapiCreateError",
+    "params": [
+      "code",
+      "details",
+      "suppressEmail"
+    ],
+    "comment": "*\n * Create an nlobjError object that can be used to abort script execution and configure error notification\n *\n * @param {string} \tcode error code\n * @param {string} \tdetails error description\n * @param {boolean} [suppressEmail] if true then suppress the error notification emails from being sent out (false by default).\n * @return {nlobjError}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiCreateForm",
+    "label": "nlapiCreateForm",
+    "params": [
+      "title",
+      "hideHeader"
+    ],
+    "comment": "*\n * Return a new entry form page.\n * @restriction Suitelets only\n *\n * @param {string} \ttitle page title\n * @param {boolean} [hideHeader] true to hide the page header (false by default)\n * @return {nlobjForm}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiCreateList",
+    "label": "nlapiCreateList",
+    "params": [
+      "title",
+      "hideHeader"
+    ],
+    "comment": "*\n * Return a new list page.\n * @restriction Suitelets only\n *\n * @param {string} \ttitle page title\n * @param {boolean} [hideHeader] true to hide the page header (false by default)\n * @return {nlobjList}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiCreateAssistant",
+    "label": "nlapiCreateAssistant",
+    "params": [
+      "title",
+      "hideHeader"
+    ],
+    "comment": "*\n * Return a new assistant page.\n * @restriction Suitelets only\n *\n * @param {string} \ttitle page title\n * @param {boolean} [hideHeader] true to hide the page header (false by default)\n * @return {nlobjAssistant}\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiLoadFile",
+    "label": "nlapiLoadFile",
+    "params": [
+      "id"
+    ],
+    "comment": "*\n * Load a file from the file cabinet (via its internal ID or path).\n * @governance 10 units\n * @restriction Server SuiteScript only\n *\n * @param {string, int} id internal ID or relative path to file in the file cabinet (i.e. /SuiteScript/foo.js)\n * @return {nlobjFile}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiSubmitFile",
+    "label": "nlapiSubmitFile",
+    "params": [
+      "file"
+    ],
+    "comment": "*\n * Add/update a file in the file cabinet.\n * @governance 20 units\n * @restriction Server SuiteScript only\n *\n * @param {nlobjFile} file a file object to submit\n * @return {int} return internal ID of file\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiDeleteFile",
+    "label": "nlapiDeleteFile",
+    "params": [
+      "id"
+    ],
+    "comment": "*\n * Delete a file from the file cabinet.\n * @governance 20 units\n * @restriction Server SuiteScript only\n *\n * @param {int} id internal ID of file to be deleted\n * @return {id}\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiCreateFile",
+    "label": "nlapiCreateFile",
+    "params": [
+      "name",
+      "type",
+      "contents"
+    ],
+    "comment": "*\n * Instantiate a file object (specifying the name, type, and contents which are base-64 encoded for binary types.)\n * @restriction Server SuiteScript only\n *\n * @param {string} name file name\n * @param {string} type file type i.e. plainText, htmlDoc, pdf, word (see documentation for the list of supported file types)\n * @param {string} contents string containing file contents (must be base-64 encoded for binary types)\n * @return {nlobjFile}\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiMergeRecord",
+    "label": "nlapiMergeRecord",
+    "params": [
+      "id",
+      "baseType",
+      "baseId",
+      "altType",
+      "altId",
+      "fields"
+    ],
+    "comment": "*\n * Perform a mail merge operation using any template and up to 2 records and returns an nlobjFile with the results.\n * @restriction only supported for record types that are available in mail merge: transactions, entities, custom records, and cases\n * @restriction Server SuiteScript only\n * @governance 10 units\n *\n * @param {int} \tid internal ID of template\n * @param {string} \tbaseType primary record type\n * @param {int} \tbaseId internal ID of primary record\n * @param {string} \t[altType] secondary record type\n * @param {int} \t[altId] internal ID of secondary record\n * @param {Object} \t[fields] Object of merge field values to use in the mail merge (by default all field values are obtained from records) which overrides those from the record.\n * @return {nlobjFile}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiPrintRecord",
+    "label": "nlapiPrintRecord",
+    "params": [
+      "type",
+      "id",
+      "format",
+      "properties"
+    ],
+    "comment": "*\n * Print a record (transaction) gievn its type, id, and output format.\n * @restriction Server SuiteScript only\n * @governance 10 units\n *\n * @param {string} \ttype print output type: transaction|statement|packingslip|pickingticket\n * @param {int} \tid internal ID of record to print\n * @param {string} \t[format] output format: html|pdf|default\n * @param {Object} \t[properties] Object of properties used to configure print\n * @return {nlobjFile}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiXMLToPDF",
+    "label": "nlapiXMLToPDF",
+    "params": [
+      "input"
+    ],
+    "comment": "*\n * Generate a PDF from XML using the BFO report writer (see http://big.faceless.org/products/report/).\n * @restriction Server SuiteScript only\n * @governance 10 units\n *\n * @param {string} input string containing BFO compliant XHTML\n * @return {nlobjFile}\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiCreateTemplateRenderer",
+    "label": "nlapiCreateTemplateRenderer",
+    "params": [],
+    "comment": "*\n * Create a template renderer used to generate various outputs based on a template.\n * @restriction Server SuiteScript only\n * @governance 10 units\n *\n * @param {string} type\tmedia type: pdf|html\n * @param {string} [engineType] [optional]: default is freemarker/html\n * @return {nlobjTemplateRenderer}\n *"
+  },
+  {
+    "value": "nlapiCreateEmailMerger",
+    "label": "nlapiCreateEmailMerger",
+    "params": [
+      "id"
+    ],
+    "comment": "*\n * Create an email merger used to assemble subject and body text of an email from a given\n * FreeMarker template and a set of associated records.\n * @restriction Server SuiteScript only\n *\n * @param {int} templateId\tinternal ID of the template\n * @return {nlobjEmailMerger}\n *\n * @since 2015.1"
+  },
+  {
+    "value": "nlapiLogExecution",
+    "label": "nlapiLogExecution",
+    "params": [
+      "type",
+      "title",
+      "details"
+    ],
+    "comment": "*\n * Create an entry in the script execution log (note that execution log entries are automatically purged after 30 days).\n *\n * @param {string} type\tlog type: debug|audit|error|emergency\n * @param {string} title log title (up to 90 characters supported)\n * @param {string} [details] log details (up to 3000 characters supported)\n * @return {void}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiScheduleScript",
+    "label": "nlapiScheduleScript",
+    "params": [
+      "script",
+      "deployment",
+      "parameters"
+    ],
+    "comment": "*\n * Queue a scheduled script for immediate execution and return the status QUEUED if successfull.\n * @restriction Server SuiteScript only\n * @governance 20 units\n *\n * @param {string, int}\tscript script ID or internal ID of scheduled script\n * @param {string, int} [deployment] script ID or internal ID of scheduled script deployment. If empty, the first \"free\" deployment (i.e. status = Not Scheduled or Completed) will be used\n * @param {Object} \t\tparameters Object of parameter name->values used in this scheduled script instance\n * @return {string}\tQUEUED or null if no available deployments were found or the current status of the deployment specified if it was not available.\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiOutboundSSO",
+    "label": "nlapiOutboundSSO",
+    "params": [
+      "ssoAppKey"
+    ],
+    "comment": "*\n * Return a URL with a generated OAuth token.\n * @restriction Suitelets and Portlets only\n * @governance 20 units\n *\n * @param {string} ssoAppKey\n * @return {string}\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiLoadConfiguration",
+    "label": "nlapiLoadConfiguration",
+    "params": [
+      "type"
+    ],
+    "comment": "*\n * Loads a configuration record\n * @restriction Server SuiteScript only\n * @governance 10 units\n *\n * @param {string} type\n * @return {nlobjConfiguration}\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiSubmitConfiguration",
+    "label": "nlapiSubmitConfiguration",
+    "params": [
+      "setup"
+    ],
+    "comment": "*\n * Commits all changes to a configuration record.\n * @restriction Server SuiteScript only\n * @governance 10 units\n *\n * @param {nlobjConfiguration} setup record\n * @return (void)\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiStringToDate",
+    "label": "nlapiStringToDate",
+    "params": [
+      "str",
+      "format"
+    ],
+    "comment": "*\n * Convert a String into a Date object.\n *\n * @param {string} str date string in the user's date format, timeofday format, or datetime format\n * @param {string} format format type to use: date|datetime|timeofday with date being the default\n * @return {date}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiDateToString",
+    "label": "nlapiDateToString",
+    "params": [
+      "d",
+      "formattype"
+    ],
+    "comment": "*\n * Convert a Date object into a String\n *\n * @param {date} \td date object being converted to a string\n * @param {string} [formattype] format type to use: date|datetime|timeofday with date being the default\n * @return {string}\n *\n * @since 2005.0"
+  },
+  {
+    "value": "nlapiAddDays",
+    "label": "nlapiAddDays",
+    "params": [
+      "d",
+      "days"
+    ],
+    "comment": "*\n * Add days to a Date object and returns a new Date\n *\n * @param {date} d date object used to calculate the new date\n * @param {int}\tdays the number of days to add to this date object.\n * @return {date}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiAddMonths",
+    "label": "nlapiAddMonths",
+    "params": [
+      "d",
+      "months"
+    ],
+    "comment": "*\n * Add months to a Date object and returns a new Date.\n *\n * @param {date} d date object used to calculate the new date\n * @param {int} months the number of months to add to this date object.\n * @return {date}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiFormatCurrency",
+    "label": "nlapiFormatCurrency",
+    "params": [
+      "str"
+    ],
+    "comment": "*\n * Format a number for data entry into a currency field.\n *\n * @param {string} str numeric string used to format for display as currency using user's locale\n * @return {string}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiEncrypt",
+    "label": "nlapiEncrypt",
+    "params": [
+      "s"
+    ],
+    "comment": "*\n * Encrypt a String using a SHA-1 hash function\n *\n * @param {string} s string to encrypt\n * @return {string}\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiEscapeXML",
+    "label": "nlapiEscapeXML",
+    "params": [
+      "text"
+    ],
+    "comment": "*\n * Escape a String for use in an XML document.\n *\n * @param {string} text string to escape\n * @return {string}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiStringToXML",
+    "label": "nlapiStringToXML",
+    "params": [
+      "str"
+    ],
+    "comment": "*\n * Convert a String into an XML document. Note that in Server SuiteScript XML is supported natively by the JS runtime using the e4x standard (http://en.wikipedia.org/wiki/E4X)\n * This makes scripting XML simpler and more efficient\n *\n * @param {string} str string being parsed into an XML document\n * @return {document}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiXMLToString",
+    "label": "nlapiXMLToString",
+    "params": [
+      "xml"
+    ],
+    "comment": "*\n * Convert an XML document into a String.  Note that in Server SuiteScript XML is supported natively by the JS runtime using the e4x standard (http://en.wikipedia.org/wiki/E4X)\n * This makes scripting XML data simpler and more efficient\n *\n * @param {document} xml document being serialized into a string\n * @return {string}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiValidateXML",
+    "label": "nlapiValidateXML",
+    "params": [
+      "xmlDocument",
+      "schemaDocument",
+      "schemaFolderId"
+    ],
+    "comment": "*\n * Validate that a given XML document conforms to a given XML schema. XML Schema Definition (XSD) is the expected schema format.\n *\n * @param {document} xmlDocument xml to validate\n * @param {document} schemaDocument schema to enforce\n * @param {string} schemaFolderId if your schema utilizes <import> or <include> tags which refer to sub-schemas by file name (as opposed to URL),\n *                 provide the Internal Id of File Cabinet folder containing these sub-schemas as the schemaFolderId argument\n * @throws {nlobjError} error containsing validation failure message(s) - limited to first 10\n *\n * @since 2014.1"
+  },
+  {
+    "value": "nlapiSelectValue",
+    "label": "nlapiSelectValue",
+    "params": [
+      "node",
+      "xpath"
+    ],
+    "comment": "*\n * select a value from an XML node using XPath. Supports custom namespaces (nodes in default namespace can be referenced using \"nlapi\" as the prefix)\n *\n * @param {node} node node being queried\n * @param {string} xpath string containing XPath expression.\n * @return {string}\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlapiSelectValues",
+    "label": "nlapiSelectValues",
+    "params": [
+      "node",
+      "xpath"
+    ],
+    "comment": "*\n * Select an array of values from an XML node using XPath. Supports custom namespaces (nodes in default namespace can be referenced using \"nlapi\" as the prefix)\n *\n * @param {node} \tnode node being queried\n * @param {string} \txpath string containing XPath expression.\n * @return {string[]}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiSelectNode",
+    "label": "nlapiSelectNode",
+    "params": [
+      "node",
+      "xpath"
+    ],
+    "comment": "*\n * Select a node from an XML node using XPath. Supports custom namespaces (nodes in default namespace can be referenced using \"nlapi\" as the prefix)\n *\n * @param {node} \tnode node being queried\n * @param {string} \txpath string containing XPath expression.\n * @return {node}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiSelectNodes",
+    "label": "nlapiSelectNodes",
+    "params": [
+      "node",
+      "xpath"
+    ],
+    "comment": "*\n * Select an array of nodes from an XML node using XPath. Supports custom namespaces (nodes in default namespace can be referenced using \"nlapi\" as the prefix)\n *\n * @param {node} \tnode node being queried\n * @param {string} \txpath string containing XPath expression.\n * @return {node[]}\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlapiExchangeRate",
+    "label": "nlapiExchangeRate",
+    "params": [
+      "fromCurrency",
+      "toCurrency",
+      "date"
+    ],
+    "comment": "*\n * Calculate exchange rate between two currencies as of today or an optional effective date.\n * @governance 10 units\n *\n * @param {string, int} fromCurrency internal ID or currency code of currency we are converting from\n * @param {string, int} toCurrency internal ID or currency code of currency we are converting to\n * @param {string} [date] string containing date of effective exchange rate. defaults to today\n * @return {float}\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlapiInitiateWorkflow",
+    "label": "nlapiInitiateWorkflow",
+    "params": [
+      "recordtype",
+      "id",
+      "workflowid"
+    ],
+    "comment": "*\n * Initiates a workflow on-demand and returns the workflow instance ID for the workflow-record combination.\n * @governance 20 units\n *\n * @param {string} recordtype record type ID of the workflow base record\n * @param {int} id internal ID of the base record\n * @param {string, int} workflowid internal ID or script ID for the workflow definition\n * @return {int}\n *\n * @since 2010.1"
+  },
+  {
+    "value": "nlapiInitiateWorkflowAsync",
+    "label": "nlapiInitiateWorkflowAsync",
+    "params": [
+      "recordType",
+      "id",
+      "workflowId",
+      "parameters"
+    ],
+    "comment": "*\n * Initiates a workflow on-demand and returns the workflow instance ID for the workflow-record combination.\n * @governance 20 units\n *\n * @param {string} recordtype record type ID of the workflow base record\n * @param {string, int} id internal ID of the base record\n * @param {string, int} workflowid internal ID or script ID for the workflow definition\n * @return {string}\n *\n * @since 2014.2"
+  },
+  {
+    "value": "nlapiTriggerWorkflow",
+    "label": "nlapiTriggerWorkflow",
+    "params": [
+      "recordtype",
+      "id",
+      "workflowid",
+      "actionid",
+      "stateid"
+    ],
+    "comment": "*\n * Triggers a workflow on a record.\n * @governance 20 units\n *\n * @param {string} recordtype record type ID of the workflow base record\n * @param {int} id internal ID of the base record\n * @param {string, int} workflowid internal ID or script ID for the workflow definition\n * @param {string, int} actionid internal ID or script ID of the action script\n * @param {string, int} stateid internal ID or script ID of the state contains the referenced add button action\n * @return {int}\n *\n * @since 2010.1"
+  },
+  {
+    "value": "nlapiCreateCurrentLineSubrecord",
+    "label": "nlapiCreateCurrentLineSubrecord",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * Create a subrecord on a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @retun {nlobjSubrecord}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "nlapiEditCurrentLineItemSubrecord",
+    "label": "nlapiEditCurrentLineItemSubrecord",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * edit a subrecord on a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @retun {nlobjSubrecord}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "nlapiRemoveCurrentLineItemSubrecord",
+    "label": "nlapiRemoveCurrentLineItemSubrecord",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * remove a subrecord on a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @retun {void}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "nlapiViewCurrentLineItemSubrecord",
+    "label": "nlapiViewCurrentLineItemSubrecord",
+    "params": [
+      "type",
+      "fldnam"
+    ],
+    "comment": "*\n * view a subrecord on a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @retun {nlobjSubrecord}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "nlapiViewLineItemSubrecord",
+    "label": "nlapiViewLineItemSubrecord",
+    "params": [
+      "type",
+      "fldnam",
+      "linenum"
+    ],
+    "comment": "*\n * view a subrecord on a sublist field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \ttype sublist name\n * @param {string} \tfldnam sublist field name\n * @retun {nlobjSubrecord}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "nlapiGetCache",
+    "label": "nlapiGetCache",
+    "params": [
+      "name"
+    ],
+    "comment": "*\n* get a cache object.\n* @param {string} name of the cache\n* @return {nlobjCache}\n*\n* @since 2013.2"
+  },
+  {
+    "value": "createSubrecord",
+    "label": "createSubrecord",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * create a subrecord on body field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \tfldnam body field name\n * @retun {nlobjSubrecord}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "editSubrecord",
+    "label": "editSubrecord",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * edit a subrecord on body field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \tfldnam body field name\n * @retun {nlobjSubrecord}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "removeSubrecord",
+    "label": "removeSubrecord",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * remove a subrecord on body field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \tfldnam body field name\n * @retun {void}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "viewSubrecord",
+    "label": "viewSubrecord",
+    "params": [
+      "fldnam"
+    ],
+    "comment": "*\n * view a subrecord on body field on the current record on a page.\n * @restriction supported in client and user event scripts only.\n * @param {string} \tfldnam body field name\n * @retun {nlobjSubrecord}\n *\n * @since 2011.2"
+  },
+  {
+    "value": "nlobjRecord",
+    "label": "nlobjRecord",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjRecord used for accessing and manipulating record objects.\n *\n * @classDescription Class definition for business records in the system.\n * @return {nlobjRecord}\n * @constructor\n *\n * @since 2008.2"
+  },
+  {
+    "value": "nlobjConfiguration",
+    "label": "nlobjConfiguration",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjConfiguration..\n *\n * @classDescription Class definition for interacting with setup/configuration pages\n * @return {nlobjConfiguration}\n * @constructor\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlobjFile",
+    "label": "nlobjFile",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjFile used for accessing and manipulating files in the file cabinet.\n *\n * @classDescription Encapsulation of files (media items) in the file cabinet.\n * @return {nlobjFile}\n * @constructor\n *\n * @since 2009.1"
+  },
+  {
+    "value": "nlobjSearchFilter",
+    "label": "nlobjSearchFilter",
+    "params": [
+      "name",
+      "join",
+      "operator",
+      "value",
+      "value2"
+    ],
+    "comment": "*\n * Return a new instance of nlobjSearchFilter filter objects used to define search criteria.\n *\n * @classDescription search filter\n * @constructor\n * @param {string} name filter name.\n * @param {string} join internal ID for joined search where this filter is defined\n * @param {string} operator operator name (i.e. anyOf, contains, lessThan, etc..)\n * @param {string|string[]} value\n * @param {string} value2\n * @return {nlobjSearchFilter}\n *\n * @since 2007.0"
+  },
+  {
+    "value": "nlobjSearchColumn",
+    "label": "nlobjSearchColumn",
+    "params": [
+      "name",
+      "join",
+      "summary"
+    ],
+    "comment": "*\n * Return a new instance of nlobjSearchColumn used for column objects used to define search return columns.\n *\n * @classDescription search column.\n * @return {nlobjSearchColumn}\n * @constructor\n * @param {string} name column name.\n * @param {string} join internal ID for joined search where this column is defined\n * @param {string} summary\n *\n * @since 2007.0"
+  },
+  {
+    "value": "nlobjSearchResult",
+    "label": "nlobjSearchResult",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjSearchResult used for search result row object.\n *\n * @classDescription Class definition for interacting with the results of a search operation\n * @return {nlobjSearchResult}\n * @constructor"
+  },
+  {
+    "value": "nlobjContext",
+    "label": "nlobjContext",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjContext used for user and script context information.\n *\n * @classDescription Utility class providing information about the current user and the script runtime.\n * @return {nlobjContext}\n * @constructor"
+  },
+  {
+    "value": "nlobjError",
+    "label": "nlobjError",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjError used system or user-defined error object.\n *\n * @classDescription Encapsulation of errors thrown during script execution.\n * @return {nlobjError}\n * @constructor"
+  },
+  {
+    "value": "nlobjServerResponse",
+    "label": "nlobjServerResponse",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjServerResponse..\n *\n * @classDescription Contains the results of a server response to an outbound Http(s) call.\n * @return {nlobjServerResponse}\n * @constructor\n *\n * @since 2008.1"
+  },
+  {
+    "value": "nlobjResponse",
+    "label": "nlobjResponse",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjResponse used for scripting web responses in Suitelets\n *\n * @classDescription Accessor to Http response made available to Suitelets.\n * @return {nlobjResponse}\n * @constructor"
+  },
+  {
+    "value": "nlobjRequest",
+    "label": "nlobjRequest",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjRequest used for scripting web requests in Suitelets\n *\n * @classDescription Accessor to Http request data made available to Suitelets\n * @return {nlobjRequest}\n * @constructor"
+  },
+  {
+    "value": "nlobjPortlet",
+    "label": "nlobjPortlet",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjPortlet used for scriptable dashboard portlet.\n *\n * @classDescription UI Object used for building portlets that are displayed on dashboard pages\n * @return {nlobjPortlet}\n * @constructor"
+  },
+  {
+    "value": "nlobjList",
+    "label": "nlobjList",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjList used for scriptable list page.\n *\n * @classDescription UI Object page type used for building lists\n * @return {nlobjList}\n * @constructor"
+  },
+  {
+    "value": "nlobjForm",
+    "label": "nlobjForm",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjForm used for scriptable form page.\n *\n * @classDescription UI Object page type used for building basic data entry forms.\n * @return {nlobjForm}\n * @constructor"
+  },
+  {
+    "value": "nlobjAssistant",
+    "label": "nlobjAssistant",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjAssistant.\n *\n * @classDescription UI Object page type used to build multi-step \"assistant\" pages to simplify complex workflows. All data and state for an assistant is tracked automatically\n * throughout the user's session up until completion of the assistant.\n *\n * @return {nlobjAssistant}\n * @constructor\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlobjField",
+    "label": "nlobjField",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjField used for scriptable form/sublist field.\n * This object is READ-ONLY except for scripted fields created via the UI Object API using Suitelets or beforeLoad user events\n *\n * @classDescription Core descriptor for fields used to define records and also used to build pages and portlets.\n * @return {nlobjField}\n * @constructor"
+  },
+  {
+    "value": "nlobjSubList",
+    "label": "nlobjSubList",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjSubList used for scriptable sublist (sublist).\n * This object is READ-ONLY except for instances created via the UI Object API using Suitelets or beforeLoad user events.\n *\n * @classDescription high level container for defining sublist (many to one) relationships on a record or multi-line data entry UIs on pages.\n * @return {nlobjSubList}\n * @constructor"
+  },
+  {
+    "value": "nlobjColumn",
+    "label": "nlobjColumn",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjColumn used for scriptable list column.\n *\n * @classDescription Class definition for columns used on lists and list portlets.\n * @return {nlobjColumn}\n * @constructor"
+  },
+  {
+    "value": "nlobjTab",
+    "label": "nlobjTab",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjTab used for scriptable tab or subtab.\n *\n * @classDescription high level grouping for fields on a data entry form (nlobjForm).\n * @return {nlobjTab}\n * @constructor"
+  },
+  {
+    "value": "nlobjAssistantStep",
+    "label": "nlobjAssistantStep",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjAssistantStep.\n *\n * @classDescription assistant step definition. Used to define individual steps/pages in multi-step workflows.\n * @return {nlobjAssistantStep}\n * @constructor\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlobjFieldGroup",
+    "label": "nlobjFieldGroup",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjFieldGroup (currently only supported on nlobjAssistant pages)\n *\n * @classDescription object used for grouping fields on pages (currently only supported on assistant pages).\n * @return {nlobjFieldGroup}\n * @constructor\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlobjButton",
+    "label": "nlobjButton",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjButton.\n *\n * @classDescription buttons used for triggering custom behaviors on pages.\n * @return {nlobjButton}\n * @constructor\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlobjSelectOption",
+    "label": "nlobjSelectOption",
+    "params": [],
+    "comment": "*\n * Return a new instance of nlobjSelectOption.\n *\n * @classDescription select|radio option used for building select fields via the UI Object API and for describing select|radio fields.\n * @return {nlobjSelectOption}\n * @constructor\n *\n * @since 2009.2"
+  },
+  {
+    "value": "nlapiGetLogin",
+    "label": "nlapiGetLogin",
+    "params": [],
+    "comment": "*\n * @return nlobjLogin\n *\n * @since 2012.2"
+  },
+  {
+    "value": "nlapiGetJobManager",
+    "label": "nlapiGetJobManager",
+    "params": [
+      "jobType"
+    ],
+    "comment": "*\n * @param {string} Job Type\n * @return {nlobjJobManager}\n *\n * @since 2013.1"
   }
-];
-
-var fetchLines = function() {
-  var allLines = $('#historywindow > div').map(function(_, line) {return $(line).text()});
-  var inputLines = allLines.filter(function(_, item) {
-    return item.substr(0, 1) === '$';
-  });
-  var inputWithoutPrompt = inputLines.map(function(_, item) {
-    return item.substr(2);
-  });
-  return inputWithoutPrompt;
-}
-
-var evalInputSelector = '#evalexpression';
-var evalInputElement = $(evalInputSelector);
-if (evalInputElement.length > 0) {
-  // evalInputElement.attr("autocomplete", "off");
-  var handler = function(e) {
-    if (e.keyCode == 38) {
-      var items = fetchLines();
-      counter++;
-      if (counter >= items.length) {
-        counter = items.length - 1;
-      }
-      var selected = items[counter];
-      evalInputElement.val(selected);
-
-    } else if (e.keyCode == 40) {
-      var items = fetchLines();
-      counter--;
-      if (counter <= -1) {
-        counter = -1;
-        return evalInputElement.val('');
-      }
-      console.log(counter);
-      // >= 0
-      var selected = items[counter];
-      evalInputElement.val(selected);
-    }
-  };
-  var counter = -1;
-  evalInputElement.on('keyup', handler);
-
-  // inject some elements to provide better UI for autocompletion
-
-
-  evalInputElement.parent().append('<input type="hidden" id="ns-api-id">');
-  evalInputElement.parent().append('<p id="ns-api-params"></p>');
-  zzz = evalInputElement.autocomplete({
-      minLength: 0,
-      source: API_LIST,
-      focus: function( event, ui ) {
-        evalInputElement.val( ui.item.name );
-        return false;
-      },
-      select: function( event, ui ) {
-        $( evalInputSelector ).val( ui.item.name );
-        $( "#ns-api-id" ).val( ui.item.name );
-        $( "#ns-api-params" ).val( ui.item.params );
-        return false;
-      }
-    })
-    .autocomplete().data("uiAutocomplete")._renderItem = function( ul, item ) {
-      return $( "<li>" )
-        .append( "<a>" + item.name + "<br>(" + item.params.join(', ') + ")</a>" )
-        .appendTo( ul );
-    };
-}
-
-},{"jquery":6,"jquery-ui/autocomplete":1}],8:[function(require,module,exports){
-require('./debug-helper');
-
-},{"./debug-helper":7}]},{},[8]);
+]
+},{}]},{},[9]);

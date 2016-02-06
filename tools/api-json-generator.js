@@ -4,7 +4,7 @@ const esprima = require('esprima')
 const fs = require('fs')
 const path = require('path')
 
-const netsuiteApi = fs.readFileSync(path.join(__dirname, 'netsuite-api.js'))
+const netsuiteApi = fs.readFileSync(path.join(__dirname, '..', 'vendor', 'netsuite-api.js'))
 const outPath = path.join(__dirname, '..', 'vendor', 'netsuite-api.json')
 const ast = esprima.parse(netsuiteApi, {attachComment: true})
 
@@ -26,7 +26,8 @@ ast.body.forEach((item, index) => {
   }
   if (item.type === 'FunctionDeclaration') {
     output.push({
-      name: item.id.name,
+      value: item.id.name, // NOTE: try to improve search by converting camelcase to dash seperated
+      label: item.id.name,
       params: item.params.map(p => p.name),
       comment: comment.value.trim()
     })

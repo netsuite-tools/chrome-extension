@@ -4,7 +4,7 @@
   "description": "",
   "main": "src/index.js",
   "scripts": {
-    "bundle": "browserify src/index.js  --outfile dist/bundle.js"
+    "bundle": "browserify src/index.js  --outfile dist/bundle.js && cp node_modules/jquery-ui/themes/smoothness/jquery-ui.min.css dist/."
   },
   "repository": {
     "type": "git",

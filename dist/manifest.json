@@ -5,9 +5,12 @@
   "version": "0.1",
   "content_scripts": [
     {
-      "matches": ["https://*.netsuite.com/*"],
+      "matches": ["<all_urls>"],
       "js": ["bundle.js"],
-      "run_at": "document_end"
+      "css": [
+        "jquery-ui.min.css",
+        "styles.css"
+      ]
     }
   ]
 }

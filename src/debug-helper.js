@@ -1,91 +1,114 @@
 var $ = require('jquery');
 require('jquery-ui/autocomplete');
+observeDOM = require('./dom-observer');
 
-// var API_LIST = require('../vendor/netsuite-api.json');
-var API_LIST = [
-  {
-    "name": "nlapiCopyRecord",
-    "params": [
-      "type",
-      "id",
-      "initializeValues"
-    ],
-    "comment": "*\n * Return a new record using values from an existing record.\n * @governance 10 units for transactions, 2 for custom records, 4 for all other records\n *\n * @param {string} \ttype The record type name.\n * @param {int} \tid The internal ID for the record.\n * @param {Object} \tinitializeValues Contains an array of name/value pairs of defaults to be used during record initialization.\n * @return {nlobjRecord}  Returns an nlobjRecord object of a copied record.\n *\n * @since\t2007.0"
-  },
-  {
-    "name": "nlapiLoadRecord",
-    "params": [
-      "type",
-      "id",
-      "initializeValues"
-    ],
-    "comment": "*\n * Load an existing record from the system.\n * @governance 10 units for transactions, 2 for custom records, 4 for all other records\n *\n * @param {string} \ttype The record type name.\n * @param {int} \tid The internal ID for the record.\n * @param {Object} \tinitializeValues Contains an array of name/value pairs of defaults to be used during record initialization.\n * @return {nlobjRecord}  Returns an nlobjRecord object of an existing NetSuite record.\n *\n * @exception {SSS_INVALID_RECORD_TYPE}\n * @exception {SSS_TYPE_ARG_REQD}\n * @exception {SSS_INVALID_INTERNAL_ID}\n * @exception {SSS_ID_ARG_REQD}\n *\n * @since\t2007.0"
-  }
-];
+var API_LIST = require('../vendor/netsuite-api.json');
+var STORAGE_KEY = 'debugger-history';
 
-var fetchLines = function() {
-  var allLines = $('#historywindow > div').map(function(_, line) {return $(line).text()});
-  var inputLines = allLines.filter(function(_, item) {
-    return item.substr(0, 1) === '$';
-  });
-  var inputWithoutPrompt = inputLines.map(function(_, item) {
-    return item.substr(2);
-  });
-  return inputWithoutPrompt;
+var addEntry = function(entry) {
+  var list = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  list.unshift(entry);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+var getEntries = function() {
+  return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 }
 
+var historyMode = false;
 var evalInputSelector = '#evalexpression';
 var evalInputElement = $(evalInputSelector);
 if (evalInputElement.length > 0) {
-  // evalInputElement.attr("autocomplete", "off");
-  var handler = function(e) {
+  var counter = -1;
+  evalInputElement.attr("autocomplete", "off");
+  var keyDownHandler = function(e) {
+    if (e.keyCode == 13) {
+      if ($('.ui-autocomplete .ui-state-focus').length === 0) {
+        addEntry(evalInputElement.val());
+        counter = -1;
+      }
+    }
+    if (e.shiftKey && (e.keyCode == 38 || e.keyCode == 40)) {
+      // stop jquery autocomplete handler
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      e.stopPropagation();
+    } else {
+      // continue with other handlers
+      return true;
+    }
     if (e.keyCode == 38) {
-      var items = fetchLines();
+      // arrow up
+      var items = getEntries();
       counter++;
       if (counter >= items.length) {
         counter = items.length - 1;
       }
       var selected = items[counter];
       evalInputElement.val(selected);
-
     } else if (e.keyCode == 40) {
-      var items = fetchLines();
+      // arrow down
+      var items = getEntries();
       counter--;
       if (counter <= -1) {
         counter = -1;
         return evalInputElement.val('');
       }
-      console.log(counter);
       // >= 0
       var selected = items[counter];
       evalInputElement.val(selected);
     }
   };
-  var counter = -1;
-  evalInputElement.on('keyup', handler);
 
-  // inject some elements to provide better UI for autocompletion
+  evalInputElement.on('keydown', keyDownHandler);
 
-
+  // inject hidden input for jquery autocomplete
   evalInputElement.parent().append('<input type="hidden" id="ns-api-id">');
-  evalInputElement.parent().append('<p id="ns-api-params"></p>');
-  zzz = evalInputElement.autocomplete({
+  evalInputElement.autocomplete({
       minLength: 0,
       source: API_LIST,
       focus: function( event, ui ) {
-        evalInputElement.val( ui.item.name );
+        evalInputElement.val( ui.item.label );
         return false;
       },
       select: function( event, ui ) {
-        $( evalInputSelector ).val( ui.item.name );
-        $( "#ns-api-id" ).val( ui.item.name );
-        $( "#ns-api-params" ).val( ui.item.params );
+        $( evalInputSelector ).val( ui.item.label );
+        $( "#ns-api-id" ).val( ui.item.value );
         return false;
-      }
+      },
     })
     .autocomplete().data("uiAutocomplete")._renderItem = function( ul, item ) {
       return $( "<li>" )
-        .append( "<a>" + item.name + "<br>(" + item.params.join(', ') + ")</a>" )
+        .append( "<a title='" + item.comment + "'><div>" + item.value + "</div><div class='small'>" + "function(" + item.params.join(', ') + ")</div></a" )
         .appendTo( ul );
     };
+}
+
+// inject button to copy and close the cookie debug session
+//https://debugger.sandbox.netsuite.com/app/common/scripting/scriptdebugger.nl?attach=T
+if ($(".uir-record-type").text() === "Debug Existing") {
+  observeDOM( document.querySelector("#outerwrapper"), function(arg) {
+    setTimeout(function() {
+      var cookie = $("#div__alert .descr");
+      if (cookie.length > 0) {
+        $(document.body).append("<button style='font-size: 2em;'class='copy-debug-sesion'>Copy Cookie & Close</button>");
+        $(".copy-debug-sesion").on('click', function(e) {
+          var range = document.createRange();
+          range.selectNode(cookie[0]);
+          window.getSelection().addRange(range);
+          try {
+            var successful = document.execCommand('copy');
+            if (!successful) {
+              throw new Error();
+            }
+            $('#tbl_close button').click();
+          } catch(err) {
+            $(document.body).append('<div>Oops, could not copy, just press <pre>CTR/CMD + C</pre> now</div>');
+            console.log($("#div__alert .descr").text());
+          }
+        });
+      } else {
+        alert('Cookie not found');
+      }
+    }, 100);
+  });
 }
