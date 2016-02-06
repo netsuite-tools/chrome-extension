@@ -4,7 +4,7 @@
 
 Download the __crx__ file on [the release page](https://github.com/netsuite-devtools/chrome-web-extensions/releases).
 
-Then open [chrome://extensions/](chrome://extensions/) in
+Then open`chrome://extensions/` in
 your Chrome browser and drag the __crx__ file into the page.
 
 ## Features
