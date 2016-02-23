@@ -1,4 +1,6 @@
-# NetSuite Developer Tools
+# NetSuite Tools
+
+This Chrome extension is a collection of client side hooks on NetSuite.
 
 # Installation
 
@@ -9,12 +11,15 @@ your Chrome browser and drag the __crx__ file from your downloads directory into
 
 ## Features
 
-#### Freemarker to WYSIWYG Injector
+#### Freemarker to WYSIWYG
 
-- Providing a button next to the template select box to put (like in the preview)
+Provides a button for E-Mail templates next to the template select box to put (like in the preview)
 the HTML result into the WYSIWYG editor.
 
-#### Debugger
+The default behaviour of handling Freemarker templates which
+includes a `<#include>` tag in NetSuite is that the included content is not shown in the WYSIWYG editor.
+
+#### Memorize Debugger with Autocomplete
 
 Extending __Evaluate Expressions__ input element in the Script Debugger
 
