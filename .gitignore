@@ -1,2 +1,4 @@
 node_modules/*
 dist.pem
+dist/bundle.js
+dist/jquery-ui.min.css
