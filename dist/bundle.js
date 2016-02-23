@@ -12614,7 +12614,9 @@ document.body.appendChild(script);
 },{}],10:[function(require,module,exports){
 var jQuery = require('jquery');
 
-require('./debug-helper');
+if (window.location.pathname == "/app/common/scripting/scriptdebugger.nl") {
+  require('./debug-helper');
+}
 
 if (
   window.location.pathname == "/app/crm/common/crmmessage.nl" &&
