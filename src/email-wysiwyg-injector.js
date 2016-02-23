@@ -5,6 +5,7 @@ function injector() {
   function loadTemplateToWysiwyg(event) {
     event.preventDefault();
     var button = jQuery(".load-template-to-wysiwyg")[0];
+    var previewBoilerplate = /<p><b>Betreff<\/b><br\s*\/*>\s*PREVIEW\s*<p><b>Nachricht<\/b><br>|<p><b>Betreff<\/b><br\s\/>\s*PREVIEW<\/p>\s*<p><b>Nachricht<\/b><\/p>/g;
 
     var data = {
       recordtype:'313',
@@ -16,7 +17,7 @@ function injector() {
     jQuery.post('https://system.sandbox.netsuite.com/app/crm/common/crmmessage.nl?l=T&l=T', data)
     .success(function(html) {
       // remove subject and email recipient
-      var htmlToInject = html.replace(/<body>(.*)<center>/g, '<body><center>');
+      var htmlToInject = html.replace(previewBoilerplate, '');
       window.CKEDITOR.instances.message.setData(htmlToInject);
     }).fail(function(error) {
       console.error(error);
