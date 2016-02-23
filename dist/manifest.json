@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
-  "name": "NetSuite Developer Tools",
-  "description": "This extension to help developers using the NetSuite Webinterface. It helps you to avoid too much manual clicks and typing.",
+  "name": "NetSuite Tools",
+  "description": "This extension extends the NetSuite Webinterface to save your time and try to keep your mood up.",
   "version": "0.2",
   "content_scripts": [
     {
