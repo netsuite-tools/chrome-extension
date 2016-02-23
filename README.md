@@ -9,6 +9,11 @@ your Chrome browser and drag the __crx__ file into the page.
 
 ## Features
 
+#### Freemarker to WYSIWYG Injector
+
+- Providing a button next to the template select box to put (like in the preview)
+the HTML result into the WYSIWYG editor.
+
 #### Debugger
 
 Extending __Evaluate Expressions__ input element in the Script Debugger
@@ -26,3 +31,11 @@ localStorage.removeItem('debugger-history')
 
 ###### Demo Screencast
 [![Demo](http://img.youtube.com/vi/1x8QxyyGy_c/0.jpg)](https://www.youtube.com/watch?v=1x8QxyyGy_c)
+
+
+## Development
+
+```
+npm i
+npm run bundle
+```

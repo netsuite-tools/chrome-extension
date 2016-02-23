@@ -12549,7 +12549,7 @@ if ($(".uir-record-type").text() === "Debug Existing") {
   });
 }
 
-},{"../vendor/netsuite-api.json":10,"./dom-observer":8,"jquery":6,"jquery-ui/autocomplete":1}],8:[function(require,module,exports){
+},{"../vendor/netsuite-api.json":11,"./dom-observer":8,"jquery":6,"jquery-ui/autocomplete":1}],8:[function(require,module,exports){
 // from http://stackoverflow.com/a/14570614
 module.exports = (function(){
     var MutationObserver = window.MutationObserver || window.WebKitMutationObserver,
@@ -12573,9 +12573,57 @@ module.exports = (function(){
 })();
 
 },{}],9:[function(require,module,exports){
+// this function should not be invoked in the chrome extension sandbox
+// instead in the real context of the page to access to the ckeditor
+function injector() {
+  // action to render template via preview API and put result into the WYSIWIG editor
+  function loadTemplateToWysiwyg(event) {
+    event.preventDefault();
+    var button = jQuery(".load-template-to-wysiwyg")[0];
+
+    var data = {
+      recordtype:'313',
+      record: '1',
+      preview :'T',
+      subject :'PREVIEW',
+      message: window.CKEDITOR.instances.message.getData()
+    };
+    jQuery.post('https://system.sandbox.netsuite.com/app/crm/common/crmmessage.nl?l=T&l=T', data)
+    .success(function(html) {
+      // remove subject and email recipient
+      var htmlToInject = html.replace(/<body>(.*)<center>/g, '<body><center>');
+      window.CKEDITOR.instances.message.setData(htmlToInject);
+    }).fail(function(error) {
+      console.error(error);
+      alert('Template konnte nicht in den WYSIWY Editor geladen werden');
+    });
+  }
+
+  // disable update template checkbox
+  jQuery('#updatetemplate_fs_inp')[0].disabled = true;
+
+  // add button to trigger function above
+  jQuery(".uir-field-wrapper.uir-inline-tag.uir-onoff").prepend("<button class='load-template-to-wysiwyg'>Lade Template in den WYSIWYG Editor</button>");
+  jQuery(".load-template-to-wysiwyg").on('click', loadTemplateToWysiwyg);
+}
+// inject the function and execute it
+var script = document.createElement('script');
+script.appendChild(document.createTextNode('('+ injector +')();'));
+document.body.appendChild(script);
+
+},{}],10:[function(require,module,exports){
+var jQuery = require('jquery');
+
 require('./debug-helper');
 
-},{"./debug-helper":7}],10:[function(require,module,exports){
+if (
+  window.location.pathname == "/app/crm/common/crmmessage.nl" &&
+  jQuery("#messages_form").length > 0
+) {
+    require('./email-wysiwyg-injector');
+  }
+
+},{"./debug-helper":7,"./email-wysiwyg-injector":9,"jquery":6}],11:[function(require,module,exports){
 module.exports=[
   {
     "value": "nlapiCopyRecord",
@@ -13962,4 +14010,4 @@ module.exports=[
     "comment": "*\n * @param {string} Job Type\n * @return {nlobjJobManager}\n *\n * @since 2013.1"
   }
 ]
-},{}]},{},[9]);
+},{}]},{},[10]);
